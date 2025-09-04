@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Series con Web Workers</title>
+  <style>
+    .contenedor-flex {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .contenedor-derecha {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-left: 20px;
+    }
+    .cajas-texto {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    textarea, input[type="text"] {
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Generar Series en Paralelo</h2>
+
+  <div class="contenedor-flex">
+    <div>
+      <label for="limite">Hasta qué número quieres la serie:</label>
+      <input type="number" id="limite" value="20">
+    </div>
+    
+    <div class="contenedor-derecha">
+      <div class="cajas-texto">
+        <textarea id="textoGrande" placeholder="Párrafo" rows="3" cols="30"></textarea>
+        <input type="text" id="textoPequeño" placeholder="Palabra" size="15">
+      </div>
+      <button id="generar">Generar</button>
+    </div>
+  </div>
+
+  <h3>Resultados:</h3>
+  <pre id="salida"></pre>
+
+  <script>
+    const inputLimite = document.getElementById("limite");
+    const botonGenerar = document.getElementById("generar");
+    const salida = document.getElementById("salida");
+    const textoGrande = document.getElementById("textoGrande");
+    const textoPequeño = document.getElementById("textoPequeño");
+
+    function crearWorker(fn) {
+      const blob = new Blob(["onmessage = " + fn.toString()], { type: "application/javascript" });
+      const url = URL.createObjectURL(blob);
+      return new Worker(url);
+    }
+
+    function workerPares(e) {
+      const limite = e.data;
+      let pares = [];
+      let paresNum = 2;
+      for (let i = 0; i < limite; i++) {
+        pares.push(paresNum);
+        paresNum += 2;
+      }
+      postMessage(pares.join(", "));
+    }
+
+    function workerImpares(e) {
+      const limite = e.data;
+      let impares = [];
+      let imparesNum = 1;
+      for (let i = 0; i < limite; i++) {
+        impares.push(imparesNum);
+        imparesNum += 2;
+      }
+      postMessage(impares.join(", "));
+    }
+
+    function workerBusqueda(e) {
+      const { texto, palabra } = e.data;
+      
+      if (!texto || !palabra) {
+        postMessage("No se proporcionó texto o palabra para buscar");
+        return;
+      }
+      
+      const textoMin = texto.toLowerCase();
+      const palabraMin = palabra.toLowerCase();
+      const palabras = textoMin.split(/\s+/);
+      
+      palabras.sort();
+      
+      let inicio = 0;
+      let fin = palabras.length - 1;
+      let encontrado = false;
+      
+      while (inicio <= fin) {
+        const medio = Math.floor((inicio + fin) / 2);
+        const comparacion = palabras[medio].localeCompare(palabraMin);
+        
+        if (comparacion === 0) {
+          encontrado = true;
+          break;
+        } else if (comparacion < 0) {
+          inicio = medio + 1;
+        } else {
+          fin = medio - 1;
+        }
+      }
+      
+      if (encontrado) {
+        postMessage("Sí existe la palabra en ambas cajas");
+      } else {
+        postMessage("No existe la palabra en ambas cajas");
+      }
+    }
+
+    botonGenerar.addEventListener("click", () => {
+      salida.textContent = "Calculando...\n";
+
+      const limite = parseInt(inputLimite.value);
+      const wPares = crearWorker(workerPares);
+      const wImpares = crearWorker(workerImpares);
+      const wBusqueda = crearWorker(workerBusqueda);
+
+      wPares.onmessage = (e) => salida.textContent += `Pares: ${e.data}\n`;
+      wImpares.onmessage = (e) => salida.textContent += `Impares: ${e.data}\n`;
+      wBusqueda.onmessage = (e) => salida.textContent += `\n${e.data}\n`;
+
+      wPares.postMessage(limite);
+      wImpares.postMessage(limite);
+      wBusqueda.postMessage({ 
+        texto: textoGrande.value, 
+        palabra: textoPequeño.value 
+      });
+    });
+  </script>
+</body>
+</html>
